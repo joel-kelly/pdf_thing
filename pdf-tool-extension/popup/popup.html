@@ -194,6 +194,20 @@
 
   <!-- Scripts -->
   <script src="../libs/pdf-lib.min.js"></script>
-  <script type="module" src="popup.js"></script>
+  <script type="module">
+    // Load PDF.js as module and expose globally
+    import * as pdfjsLib from '../libs/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '../libs/pdf.worker.min.mjs';
+    window.pdfjsLib = pdfjsLib;
+
+    // Signal that libraries are ready
+    window.dispatchEvent(new Event('libs-ready'));
+  </script>
+  <script src="../src/file-handler.js"></script>
+  <script src="../src/pdf-operations.js"></script>
+  <script src="../src/signature-manager.js"></script>
+  <script src="../src/redaction.js"></script>
+  <script src="../src/ui-handler.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>

@@ -1,18 +1,22 @@
 {
   "manifest_version": 2,
   "name": "PDF Tool",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Free PDF page management, secure redaction, and signature insertion - all processed locally",
   "permissions": [
     "activeTab",
     "storage"
   ],
+  "background": {
+    "scripts": ["background/background.js"],
+    "persistent": false
+  },
   "browser_action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "48": "icons/icon-48.png",
       "96": "icons/icon-96.png"
-    }
+    },
+    "default_title": "PDF Tool"
   },
   "icons": {
     "48": "icons/icon-48.png",
