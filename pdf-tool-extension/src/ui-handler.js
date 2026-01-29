@@ -17,68 +17,74 @@
     const scale = 0.3;
 
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-      const page = await pdfJsDoc.getPage(pageNum);
-      const viewport = page.getViewport({ scale });
+      try {
+        const page = await pdfJsDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
 
-      const pageItem = document.createElement('div');
-      pageItem.className = 'page-item';
-      pageItem.dataset.pageIndex = pageNum - 1;
-      pageItem.draggable = true;
+        const pageItem = document.createElement('div');
+        pageItem.className = 'page-item';
+        pageItem.dataset.pageIndex = pageNum - 1;
+        pageItem.draggable = true;
 
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
 
-      const context = canvas.getContext('2d');
-      await page.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise;
+        // Add canvas to DOM first (some browsers need this)
+        pageItem.appendChild(canvas);
+        container.appendChild(pageItem);
 
-      pageItem.appendChild(canvas);
+        const context = canvas.getContext('2d');
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
 
-      const pageLabel = document.createElement('span');
-      pageLabel.className = 'page-number';
-      pageLabel.textContent = pageNum;
-      pageItem.appendChild(pageLabel);
+        // Add other elements after render
+        const pageLabel = document.createElement('span');
+        pageLabel.className = 'page-number';
+        pageLabel.textContent = pageNum;
+        pageItem.appendChild(pageLabel);
 
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'select-checkbox';
-      checkbox.addEventListener('change', function() {
-        pageItem.classList.toggle('selected', checkbox.checked);
-        if (options.onSelect) {
-          options.onSelect(pageNum - 1, checkbox.checked);
-        }
-      });
-      pageItem.appendChild(checkbox);
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'select-checkbox';
+        checkbox.addEventListener('change', function() {
+          pageItem.classList.toggle('selected', checkbox.checked);
+          if (options.onSelect) {
+            options.onSelect(pageNum - 1, checkbox.checked);
+          }
+        });
+        pageItem.appendChild(checkbox);
 
-      const controls = document.createElement('div');
-      controls.className = 'page-controls';
+        const controls = document.createElement('div');
+        controls.className = 'page-controls';
 
-      const rotateBtn = createControlButton('rotate', '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z"/></svg>');
-      rotateBtn.title = 'Rotate 90°';
-      rotateBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        if (options.onRotate) {
-          options.onRotate(pageNum - 1);
-        }
-      });
-      controls.appendChild(rotateBtn);
+        const rotateBtn = createControlButton('rotate', '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z"/></svg>');
+        rotateBtn.title = 'Rotate 90°';
+        rotateBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (options.onRotate) {
+            options.onRotate(pageNum - 1);
+          }
+        });
+        controls.appendChild(rotateBtn);
 
-      const deleteBtn = createControlButton('delete', '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>');
-      deleteBtn.title = 'Delete page';
-      deleteBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        if (options.onDelete) {
-          options.onDelete(pageNum - 1);
-        }
-      });
-      controls.appendChild(deleteBtn);
+        const deleteBtn = createControlButton('delete', '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>');
+        deleteBtn.title = 'Delete page';
+        deleteBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (options.onDelete) {
+            options.onDelete(pageNum - 1);
+          }
+        });
+        controls.appendChild(deleteBtn);
 
-      pageItem.appendChild(controls);
-      setupDragAndDrop(pageItem, container, options.onReorder);
-      container.appendChild(pageItem);
+        pageItem.appendChild(controls);
+        setupDragAndDrop(pageItem, container, options.onReorder);
+      } catch (error) {
+        console.error('Error rendering page ' + pageNum + ':', error);
+      }
     }
   }
 
