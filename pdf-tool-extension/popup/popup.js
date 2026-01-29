@@ -30,8 +30,21 @@
   function init() {
     console.log('PDF Tool initializing...');
 
+    // Check if libraries are loaded
+    if (typeof window.pdfjsLib === 'undefined') {
+      console.error('PDF.js not loaded yet');
+      return;
+    }
+    if (typeof window.PDFLib === 'undefined') {
+      console.error('PDF-lib not loaded');
+      return;
+    }
+
     // Cache DOM elements
     cacheElements();
+
+    // Prevent default drag behavior on the entire document
+    setupGlobalDragPrevention();
 
     // Setup event listeners
     setupEventListeners();
@@ -39,7 +52,33 @@
     // Load saved signatures
     refreshSignatureLibrary();
 
-    console.log('PDF Tool ready');
+    console.log('PDF Tool ready!');
+  }
+
+  /**
+   * Prevent default drag/drop on document to stop Firefox from opening files
+   */
+  function setupGlobalDragPrevention() {
+    // Prevent default drag behaviors on document
+    document.addEventListener('dragenter', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    document.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    document.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    document.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
   }
 
   /**
@@ -92,35 +131,70 @@
     elements.addTimestampCheck = document.getElementById('add-timestamp-check');
     elements.placeSignatureBtn = document.getElementById('place-signature-btn');
     elements.cancelPlacementBtn = document.getElementById('cancel-placement-btn');
+
+    // Log if any elements are missing
+    Object.keys(elements).forEach(function(key) {
+      if (!elements[key]) {
+        console.warn('Element not found:', key);
+      }
+    });
   }
 
   /**
    * Setup all event listeners
    */
   function setupEventListeners() {
-    elements.uploadArea.addEventListener('click', function() {
+    // File upload - click
+    elements.uploadArea.addEventListener('click', function(e) {
+      console.log('Upload area clicked');
       elements.fileInput.click();
     });
-    elements.fileInput.addEventListener('change', handleFileSelect);
-    elements.uploadArea.addEventListener('dragover', handleDragOver);
-    elements.uploadArea.addEventListener('dragleave', handleDragLeave);
-    elements.uploadArea.addEventListener('drop', handleDrop);
 
+    elements.fileInput.addEventListener('change', function(e) {
+      console.log('File input changed', e.target.files);
+      handleFileSelect(e);
+    });
+
+    // File upload - drag and drop on upload area
+    elements.uploadArea.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      elements.uploadArea.classList.add('dragover');
+    });
+
+    elements.uploadArea.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      elements.uploadArea.classList.remove('dragover');
+    });
+
+    elements.uploadArea.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      elements.uploadArea.classList.remove('dragover');
+      console.log('File dropped', e.dataTransfer.files);
+      handleDrop(e);
+    });
+
+    // Mode buttons
     elements.pageModeBtn.addEventListener('click', function() { switchMode('pages'); });
     elements.redactModeBtn.addEventListener('click', function() { switchMode('redact'); });
     elements.signatureModeBtn.addEventListener('click', function() { switchMode('signature'); });
 
+    // Page action buttons
     elements.mergeBtn.addEventListener('click', handleMerge);
     elements.splitBtn.addEventListener('click', handleSplit);
     elements.extractBtn.addEventListener('click', handleExtract);
     elements.downloadBtn.addEventListener('click', handleDownload);
     elements.mergeInput.addEventListener('change', handleMergeFiles);
 
+    // Redaction controls
     elements.redactPrevPage.addEventListener('click', function() { navigateRedactPage(-1); });
     elements.redactNextPage.addEventListener('click', function() { navigateRedactPage(1); });
     elements.clearBoxesBtn.addEventListener('click', clearRedactionBoxes);
     elements.applyRedactionBtn.addEventListener('click', applyRedaction);
 
+    // Signature controls
     elements.addSignatureBtn.addEventListener('click', showSignatureDialog);
     elements.signatureDropzone.addEventListener('click', function() {
       elements.signatureFile.click();
@@ -138,26 +212,19 @@
     });
     elements.placeSignatureBtn.addEventListener('click', handlePlaceSignature);
     elements.cancelPlacementBtn.addEventListener('click', cancelSignaturePlacement);
-  }
 
-  function handleDragOver(e) {
-    e.preventDefault();
-    elements.uploadArea.classList.add('dragover');
-  }
-
-  function handleDragLeave() {
-    elements.uploadArea.classList.remove('dragover');
+    console.log('Event listeners attached');
   }
 
   function handleDrop(e) {
-    e.preventDefault();
-    elements.uploadArea.classList.remove('dragover');
-
     var files = e.dataTransfer.files;
     if (files.length > 0) {
       var file = files[0];
+      console.log('Dropped file:', file.name, file.type);
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         loadPDF(file);
+      } else {
+        alert('Please drop a PDF file');
       }
     }
   }
@@ -165,27 +232,32 @@
   function handleFileSelect(e) {
     var file = e.target.files[0];
     if (file) {
+      console.log('Selected file:', file.name);
       loadPDF(file);
     }
   }
 
   function loadPDF(file) {
+    console.log('Loading PDF:', file.name);
     window.UIHandler.showLoading('Loading PDF...');
 
     window.FileHandler.loadPDFFile(file)
       .then(function(result) {
+        console.log('File read successfully');
         state.pdfData = result.data;
         state.fileName = result.name;
 
         return window.PDFOperations.loadPDFDocument(result.data);
       })
       .then(function(pdfDoc) {
+        console.log('PDF-lib loaded document');
         state.pdfDoc = pdfDoc;
 
         // Load with PDF.js
         return window.pdfjsLib.getDocument({ data: state.pdfData.slice(0) }).promise;
       })
       .then(function(pdfJsDoc) {
+        console.log('PDF.js loaded document, pages:', pdfJsDoc.numPages);
         state.pdfJsDoc = pdfJsDoc;
 
         var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
@@ -205,8 +277,8 @@
       })
       .catch(function(error) {
         window.UIHandler.hideLoading();
-        window.UIHandler.showAlert('Failed to load PDF: ' + error.message, 'error');
         console.error('PDF load error:', error);
+        alert('Failed to load PDF: ' + error.message);
       });
   }
 
@@ -266,11 +338,11 @@
           return renderPages();
         })
         .catch(function(error) {
-          window.UIHandler.showAlert('Failed to rotate page: ' + error.message, 'error');
+          alert('Failed to rotate page: ' + error.message);
           window.UIHandler.hideLoading();
         });
     } catch (error) {
-      window.UIHandler.showAlert('Failed to rotate page: ' + error.message, 'error');
+      alert('Failed to rotate page: ' + error.message);
       window.UIHandler.hideLoading();
     }
   }
@@ -279,11 +351,11 @@
     var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
 
     if (pageCount <= 1) {
-      window.UIHandler.showAlert('Cannot delete the last page', 'warning');
+      alert('Cannot delete the last page');
       return;
     }
 
-    if (!window.UIHandler.showConfirm('Delete page ' + (pageIndex + 1) + '?')) {
+    if (!confirm('Delete page ' + (pageIndex + 1) + '?')) {
       return;
     }
 
@@ -302,11 +374,11 @@
           return renderPages();
         })
         .catch(function(error) {
-          window.UIHandler.showAlert('Failed to delete page: ' + error.message, 'error');
+          alert('Failed to delete page: ' + error.message);
           window.UIHandler.hideLoading();
         });
     } catch (error) {
-      window.UIHandler.showAlert('Failed to delete page: ' + error.message, 'error');
+      alert('Failed to delete page: ' + error.message);
       window.UIHandler.hideLoading();
     }
   }
@@ -340,7 +412,7 @@
         return renderPages();
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to reorder pages: ' + error.message, 'error');
+        alert('Failed to reorder pages: ' + error.message);
         window.UIHandler.hideLoading();
       });
   }
@@ -388,10 +460,10 @@
         return renderPages();
       })
       .then(function() {
-        window.UIHandler.showAlert('Merged ' + files.length + ' PDF(s) successfully', 'success');
+        alert('Merged ' + files.length + ' PDF(s) successfully');
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to merge: ' + error.message, 'error');
+        alert('Failed to merge: ' + error.message);
       })
       .finally(function() {
         elements.mergeInput.value = '';
@@ -402,7 +474,7 @@
   function handleSplit() {
     var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
 
-    if (!window.UIHandler.showConfirm('Split into ' + pageCount + ' individual PDF files?')) {
+    if (!confirm('Split into ' + pageCount + ' individual PDF files?')) {
       return;
     }
 
@@ -414,10 +486,10 @@
         return window.FileHandler.exportMultiplePDFs(splitDocs, baseName);
       })
       .then(function() {
-        window.UIHandler.showAlert('Split into ' + pageCount + ' files', 'success');
+        alert('Split into ' + pageCount + ' files');
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to split: ' + error.message, 'error');
+        alert('Failed to split: ' + error.message);
       })
       .finally(function() {
         window.UIHandler.hideLoading();
@@ -428,7 +500,7 @@
     var selectedIndices = window.UIHandler.getSelectedPageIndices(elements.pageGrid);
 
     if (selectedIndices.length === 0) {
-      window.UIHandler.showAlert('Please select pages to extract', 'warning');
+      alert('Please select pages to extract');
       return;
     }
 
@@ -440,10 +512,10 @@
         return window.FileHandler.exportPDF(extractedDoc, baseName + '_extracted.pdf');
       })
       .then(function() {
-        window.UIHandler.showAlert('Extracted ' + selectedIndices.length + ' page(s)', 'success');
+        alert('Extracted ' + selectedIndices.length + ' page(s)');
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to extract: ' + error.message, 'error');
+        alert('Failed to extract: ' + error.message);
       })
       .finally(function() {
         window.UIHandler.hideLoading();
@@ -455,7 +527,7 @@
 
     window.FileHandler.exportPDF(state.pdfDoc, state.fileName)
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to download: ' + error.message, 'error');
+        alert('Failed to download: ' + error.message);
       })
       .finally(function() {
         window.UIHandler.hideLoading();
@@ -511,11 +583,11 @@
     });
 
     if (!hasRedactions) {
-      window.UIHandler.showAlert('No redaction boxes drawn. Draw boxes on areas you want to redact.', 'warning');
+      alert('No redaction boxes drawn. Draw boxes on areas you want to redact.');
       return;
     }
 
-    if (!window.UIHandler.showConfirm('Apply redaction? This will convert affected pages to images and cannot be undone.')) {
+    if (!confirm('Apply redaction? This will convert affected pages to images and cannot be undone.')) {
       return;
     }
 
@@ -540,10 +612,10 @@
         return renderRedactionPage();
       })
       .then(function() {
-        window.UIHandler.showAlert('Redaction applied successfully. Verify the result and download.', 'success');
+        alert('Redaction applied successfully. Verify the result and download.');
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Redaction failed: ' + error.message, 'error');
+        alert('Redaction failed: ' + error.message);
         console.error('Redaction error:', error);
       })
       .finally(function() {
@@ -574,7 +646,7 @@
   }
 
   function handleSignatureDelete(signatureId) {
-    if (!window.UIHandler.showConfirm('Delete this signature?')) {
+    if (!confirm('Delete this signature?')) {
       return;
     }
 
@@ -583,7 +655,7 @@
         return refreshSignatureLibrary();
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to delete: ' + error.message, 'error');
+        alert('Failed to delete: ' + error.message);
       });
   }
 
@@ -604,7 +676,7 @@
 
     var validation = window.FileHandler.validateSignatureImage(file);
     if (!validation.valid) {
-      window.UIHandler.showAlert(validation.error, 'error');
+      alert(validation.error);
       return;
     }
 
@@ -620,7 +692,7 @@
     var file = elements.signatureFile.files[0];
 
     if (!file) {
-      window.UIHandler.showAlert('Please select an image file', 'warning');
+      alert('Please select an image file');
       return;
     }
 
@@ -632,10 +704,10 @@
         return refreshSignatureLibrary();
       })
       .then(function() {
-        window.UIHandler.showAlert('Signature saved', 'success');
+        alert('Signature saved');
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to save: ' + error.message, 'error');
+        alert('Failed to save: ' + error.message);
       })
       .finally(function() {
         window.UIHandler.hideLoading();
@@ -719,10 +791,10 @@
         return renderSignaturePage();
       })
       .then(function() {
-        window.UIHandler.showAlert('Signature placed. Add more or download the PDF.', 'success');
+        alert('Signature placed. Add more or download the PDF.');
       })
       .catch(function(error) {
-        window.UIHandler.showAlert('Failed to place signature: ' + error.message, 'error');
+        alert('Failed to place signature: ' + error.message);
         console.error('Signature placement error:', error);
       })
       .finally(function() {
@@ -741,12 +813,21 @@
     });
   }
 
-  // Wait for libraries and DOM to be ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      window.addEventListener('libs-ready', init);
-    });
-  } else {
-    window.addEventListener('libs-ready', init);
-  }
+  // Wait for libraries to be ready
+  // The module script fires 'libs-ready' after PDF.js is loaded
+  window.addEventListener('libs-ready', function() {
+    console.log('libs-ready event received');
+    init();
+  });
+
+  // Fallback: if libs-ready already fired or module loaded before this script
+  // Check after a short delay
+  setTimeout(function() {
+    if (window.pdfjsLib && !window._pdfToolInitialized) {
+      console.log('Fallback init - pdfjsLib already available');
+      window._pdfToolInitialized = true;
+      init();
+    }
+  }, 100);
+
 })();
