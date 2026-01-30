@@ -1,6 +1,6 @@
 /**
  * PDF Tool Extension - Main Popup Script
- * Wires together all modules and handles UI interactions
+ * Orchestrates all modules and handles UI interactions
  */
 
 (function() {
@@ -12,13 +12,9 @@
     pdfJsDoc: null,
     pdfData: null,
     fileName: null,
-    pageOrder: [],
-    currentMode: 'pages',
-    currentRedactPage: 0,
-    redactionBoxes: {},
-    currentSignPage: 0,
-    selectedSignature: null,
-    signaturePlacement: null
+    viewer: null,
+    toolsPanel: null,
+    modalManager: null
   };
 
   // DOM Elements
@@ -49,8 +45,25 @@
     // Setup event listeners
     setupEventListeners();
 
-    // Load saved signatures
-    refreshSignatureLibrary();
+    // Initialize modal manager
+    state.modalManager = window.ModalManager.init();
+
+    // Initialize tools panel with callbacks
+    state.toolsPanel = window.ToolsPanel.init({
+      onRotatePage: handleRotatePage,
+      onDeletePage: handleDeletePage,
+      onExtractPage: handleExtractPage,
+      onMerge: handleMerge,
+      onSplit: handleSplit,
+      onReorder: handleReorder,
+      onRedactModeEnable: handleRedactModeEnable,
+      onRedactModeDisable: handleRedactModeDisable,
+      onApplyRedaction: handleApplyRedaction,
+      onClearRedactions: handleClearRedactions,
+      onAddSignature: handleAddSignature,
+      onSelectSignature: handleSelectSignature,
+      onDownload: handleDownload
+    });
 
     console.log('PDF Tool ready!');
   }
@@ -59,25 +72,11 @@
    * Prevent default drag/drop on document to stop Firefox from opening files
    */
   function setupGlobalDragPrevention() {
-    // Prevent default drag behaviors on document
-    document.addEventListener('dragenter', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    document.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    document.addEventListener('dragleave', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    document.addEventListener('drop', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function(eventName) {
+      document.addEventListener(eventName, function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      });
     });
   }
 
@@ -87,57 +86,24 @@
   function cacheElements() {
     elements.uploadArea = document.getElementById('upload-area');
     elements.fileInput = document.getElementById('file-input');
-    elements.modeSelector = document.getElementById('mode-selector');
-    elements.pageModeBtn = document.getElementById('page-mode-btn');
-    elements.redactModeBtn = document.getElementById('redact-mode-btn');
-    elements.signatureModeBtn = document.getElementById('signature-mode-btn');
-    elements.pageManagement = document.getElementById('page-management');
-    elements.pageGrid = document.getElementById('page-grid');
-    elements.redactionView = document.getElementById('redaction-view');
-    elements.signatureView = document.getElementById('signature-view');
-    elements.mergeBtn = document.getElementById('merge-btn');
-    elements.splitBtn = document.getElementById('split-btn');
-    elements.extractBtn = document.getElementById('extract-btn');
-    elements.downloadBtn = document.getElementById('download-btn');
+    elements.pdfViewerContainer = document.getElementById('pdf-viewer-container');
+    elements.toolsPanel = document.getElementById('tools-panel');
+    elements.zoomControls = document.getElementById('zoom-controls');
+    elements.zoomSelect = document.getElementById('zoom-select');
+    elements.zoomInBtn = document.getElementById('zoom-in-btn');
+    elements.zoomOutBtn = document.getElementById('zoom-out-btn');
+    elements.pageIndicator = document.getElementById('page-indicator');
+    elements.currentPage = document.getElementById('current-page');
+    elements.totalPages = document.getElementById('total-pages');
+    elements.fileName = document.getElementById('file-name');
     elements.mergeInput = document.getElementById('merge-input');
-
-    elements.redactPageCanvas = document.getElementById('redaction-page-canvas');
-    elements.redactOverlayCanvas = document.getElementById('redaction-overlay-canvas');
-    elements.redactPrevPage = document.getElementById('redact-prev-page');
-    elements.redactNextPage = document.getElementById('redact-next-page');
-    elements.redactPageInfo = document.getElementById('redact-page-info');
-    elements.clearBoxesBtn = document.getElementById('clear-boxes-btn');
-    elements.applyRedactionBtn = document.getElementById('apply-redaction-btn');
-
-    elements.signatureLibrary = document.getElementById('signature-library');
-    elements.signatureList = document.getElementById('signature-list');
-    elements.addSignatureBtn = document.getElementById('add-signature-btn');
-    elements.signatureUploadDialog = document.getElementById('signature-upload-dialog');
-    elements.signatureName = document.getElementById('signature-name');
-    elements.signatureDropzone = document.getElementById('signature-dropzone');
-    elements.signatureFile = document.getElementById('signature-file');
-    elements.signaturePreviewContainer = document.getElementById('signature-preview-container');
-    elements.signaturePreview = document.getElementById('signature-preview');
-    elements.saveSignatureBtn = document.getElementById('save-signature-btn');
-    elements.cancelSignatureBtn = document.getElementById('cancel-signature-btn');
-    elements.signaturePlacementEl = document.getElementById('signature-placement');
-    elements.signPageCanvas = document.getElementById('signature-page-canvas');
-    elements.signOverlayCanvas = document.getElementById('signature-overlay-canvas');
-    elements.signPrevPage = document.getElementById('sign-prev-page');
-    elements.signNextPage = document.getElementById('sign-next-page');
-    elements.signPageInfo = document.getElementById('sign-page-info');
+    elements.signatureFileInput = document.getElementById('signature-file-input');
+    elements.signaturePlacementOverlay = document.getElementById('signature-placement-overlay');
+    elements.confirmPlacementBtn = document.getElementById('confirm-placement-btn');
+    elements.cancelPlacementBtn = document.getElementById('cancel-placement-btn');
     elements.rotateSigLeft = document.getElementById('rotate-sig-left');
     elements.rotateSigRight = document.getElementById('rotate-sig-right');
     elements.addTimestampCheck = document.getElementById('add-timestamp-check');
-    elements.placeSignatureBtn = document.getElementById('place-signature-btn');
-    elements.cancelPlacementBtn = document.getElementById('cancel-placement-btn');
-
-    // Log if any elements are missing
-    Object.keys(elements).forEach(function(key) {
-      if (!elements[key]) {
-        console.warn('Element not found:', key);
-      }
-    });
   }
 
   /**
@@ -145,17 +111,13 @@
    */
   function setupEventListeners() {
     // File upload - click
-    elements.uploadArea.addEventListener('click', function(e) {
-      console.log('Upload area clicked');
+    elements.uploadArea.addEventListener('click', function() {
       elements.fileInput.click();
     });
 
-    elements.fileInput.addEventListener('change', function(e) {
-      console.log('File input changed', e.target.files);
-      handleFileSelect(e);
-    });
+    elements.fileInput.addEventListener('change', handleFileSelect);
 
-    // File upload - drag and drop on upload area
+    // File upload - drag and drop
     elements.uploadArea.addEventListener('dragover', function(e) {
       e.preventDefault();
       e.stopPropagation();
@@ -172,55 +134,87 @@
       e.preventDefault();
       e.stopPropagation();
       elements.uploadArea.classList.remove('dragover');
-      console.log('File dropped', e.dataTransfer.files);
       handleDrop(e);
     });
 
-    // Mode buttons
-    elements.pageModeBtn.addEventListener('click', function() { switchMode('pages'); });
-    elements.redactModeBtn.addEventListener('click', function() { switchMode('redact'); });
-    elements.signatureModeBtn.addEventListener('click', function() { switchMode('signature'); });
-
-    // Page action buttons
-    elements.mergeBtn.addEventListener('click', handleMerge);
-    elements.splitBtn.addEventListener('click', handleSplit);
-    elements.extractBtn.addEventListener('click', handleExtract);
-    elements.downloadBtn.addEventListener('click', handleDownload);
-    elements.mergeInput.addEventListener('change', handleMergeFiles);
-
-    // Redaction controls
-    elements.redactPrevPage.addEventListener('click', function() { navigateRedactPage(-1); });
-    elements.redactNextPage.addEventListener('click', function() { navigateRedactPage(1); });
-    elements.clearBoxesBtn.addEventListener('click', clearRedactionBoxes);
-    elements.applyRedactionBtn.addEventListener('click', applyRedaction);
-
-    // Signature controls
-    elements.addSignatureBtn.addEventListener('click', showSignatureDialog);
-    elements.signatureDropzone.addEventListener('click', function() {
-      elements.signatureFile.click();
+    // Zoom controls
+    elements.zoomSelect.addEventListener('change', function() {
+      if (state.viewer) {
+        state.viewer.setScale(elements.zoomSelect.value);
+      }
     });
-    elements.signatureFile.addEventListener('change', handleSignatureFileSelect);
-    elements.saveSignatureBtn.addEventListener('click', handleSaveSignature);
-    elements.cancelSignatureBtn.addEventListener('click', hideSignatureDialog);
-    elements.signPrevPage.addEventListener('click', function() { navigateSignPage(-1); });
-    elements.signNextPage.addEventListener('click', function() { navigateSignPage(1); });
+
+    elements.zoomInBtn.addEventListener('click', function() {
+      zoomStep(0.25);
+    });
+
+    elements.zoomOutBtn.addEventListener('click', function() {
+      zoomStep(-0.25);
+    });
+
+    // Page change event
+    window.addEventListener('page-change', function(e) {
+      updatePageIndicator(e.detail.page, e.detail.total);
+    });
+
+    // Redaction boxes change event
+    window.addEventListener('redaction-boxes-change', function(e) {
+      var hasRedactions = Object.keys(e.detail.boxes || {}).some(function(key) {
+        return e.detail.boxes[key] && e.detail.boxes[key].length > 0;
+      });
+      state.toolsPanel.updateRedactButtons(hasRedactions);
+    });
+
+    // Signature placement controls
+    elements.confirmPlacementBtn.addEventListener('click', handlePlaceSignature);
+    elements.cancelPlacementBtn.addEventListener('click', handleCancelSignaturePlacement);
     elements.rotateSigLeft.addEventListener('click', function() {
-      if (state.signaturePlacement) state.signaturePlacement.rotateLeft();
+      if (state.viewer) state.viewer.rotateSignatureLeft();
     });
     elements.rotateSigRight.addEventListener('click', function() {
-      if (state.signaturePlacement) state.signaturePlacement.rotateRight();
+      if (state.viewer) state.viewer.rotateSignatureRight();
     });
-    elements.placeSignatureBtn.addEventListener('click', handlePlaceSignature);
-    elements.cancelPlacementBtn.addEventListener('click', cancelSignaturePlacement);
 
-    console.log('Event listeners attached');
+    // Signature placement events
+    window.addEventListener('signature-placement-start', function() {
+      elements.signaturePlacementOverlay.classList.remove('hidden');
+    });
+
+    window.addEventListener('signature-placement-cancel', function() {
+      elements.signaturePlacementOverlay.classList.add('hidden');
+    });
   }
 
+  /**
+   * Zoom step
+   */
+  function zoomStep(delta) {
+    if (!state.viewer) return;
+
+    var currentScale = state.viewer.getScale();
+    var newScale = Math.max(0.25, Math.min(3, currentScale + delta));
+    newScale = Math.round(newScale * 100) / 100;
+
+    state.viewer.setScale(newScale);
+
+    // Update select to show custom value or nearest preset
+    var presets = ['0.5', '0.75', '1', '1.25', '1.5', '2'];
+    var closest = presets.reduce(function(prev, curr) {
+      return Math.abs(parseFloat(curr) - newScale) < Math.abs(parseFloat(prev) - newScale) ? curr : prev;
+    });
+
+    if (Math.abs(parseFloat(closest) - newScale) < 0.01) {
+      elements.zoomSelect.value = closest;
+    }
+  }
+
+  /**
+   * Handle file drop
+   */
   function handleDrop(e) {
     var files = e.dataTransfer.files;
     if (files.length > 0) {
       var file = files[0];
-      console.log('Dropped file:', file.name, file.type);
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         loadPDF(file);
       } else {
@@ -229,105 +223,82 @@
     }
   }
 
+  /**
+   * Handle file select
+   */
   function handleFileSelect(e) {
     var file = e.target.files[0];
     if (file) {
-      console.log('Selected file:', file.name);
       loadPDF(file);
     }
   }
 
+  /**
+   * Load PDF file
+   */
   function loadPDF(file) {
     console.log('Loading PDF:', file.name);
-    window.UIHandler.showLoading('Loading PDF...');
+    showLoading('Loading PDF...');
 
     window.FileHandler.loadPDFFile(file)
       .then(function(result) {
-        console.log('File read successfully');
         state.pdfData = result.data;
         state.fileName = result.name;
-
         return window.PDFOperations.loadPDFDocument(result.data);
       })
       .then(function(pdfDoc) {
-        console.log('PDF-lib loaded document');
         state.pdfDoc = pdfDoc;
-
-        // Load with PDF.js
         return window.pdfjsLib.getDocument({ data: state.pdfData.slice(0) }).promise;
       })
       .then(function(pdfJsDoc) {
-        console.log('PDF.js loaded document, pages:', pdfJsDoc.numPages);
         state.pdfJsDoc = pdfJsDoc;
 
-        var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
-        state.pageOrder = [];
-        for (var i = 0; i < pageCount; i++) {
-          state.pageOrder.push(i);
-        }
-
-        window.UIHandler.updatePageCount(pageCount);
+        // Update UI
         elements.uploadArea.classList.add('hidden');
-        elements.modeSelector.classList.remove('hidden');
+        elements.pdfViewerContainer.classList.remove('hidden');
+        elements.toolsPanel.classList.remove('hidden');
+        elements.zoomControls.classList.remove('hidden');
+        elements.pageIndicator.classList.remove('hidden');
 
-        return switchMode('pages');
-      })
-      .then(function() {
-        window.UIHandler.hideLoading();
+        // Update file name and page indicator
+        elements.fileName.textContent = state.fileName;
+        updatePageIndicator(1, pdfJsDoc.numPages);
+
+        // Initialize viewer
+        state.viewer = window.PDFViewer.init(pdfJsDoc, {
+          scale: 1
+        });
+
+        hideLoading();
       })
       .catch(function(error) {
-        window.UIHandler.hideLoading();
+        hideLoading();
         console.error('PDF load error:', error);
         alert('Failed to load PDF: ' + error.message);
       });
   }
 
-  function switchMode(mode) {
-    state.currentMode = mode;
-
-    document.querySelectorAll('.mode-btn').forEach(function(btn) {
-      btn.classList.toggle('active', btn.dataset.mode === mode);
-    });
-
-    elements.pageManagement.classList.add('hidden');
-    elements.redactionView.classList.add('hidden');
-    elements.signatureView.classList.add('hidden');
-
-    if (mode === 'pages') {
-      elements.pageManagement.classList.remove('hidden');
-      return renderPages();
-    } else if (mode === 'redact') {
-      elements.redactionView.classList.remove('hidden');
-      state.currentRedactPage = 0;
-      return renderRedactionPage();
-    } else if (mode === 'signature') {
-      elements.signatureView.classList.remove('hidden');
-      elements.signatureLibrary.classList.remove('hidden');
-      elements.signaturePlacementEl.classList.add('hidden');
-      return refreshSignatureLibrary();
-    }
-
-    return Promise.resolve();
+  /**
+   * Update page indicator
+   */
+  function updatePageIndicator(current, total) {
+    elements.currentPage.textContent = current;
+    elements.totalPages.textContent = total;
   }
 
-  function renderPages() {
-    window.UIHandler.showLoading('Rendering pages...');
+  /**
+   * Handle rotate page
+   */
+  function handleRotatePage(degrees) {
+    if (!state.pdfDoc || !state.viewer) return;
 
-    return window.UIHandler.renderPageThumbnails(state.pdfJsDoc, elements.pageGrid, {
-      onRotate: handleRotatePage,
-      onDelete: handleDeletePage,
-      onSelect: handlePageSelect,
-      onReorder: handlePageReorder
-    }).then(function() {
-      window.UIHandler.hideLoading();
-    });
-  }
+    var currentPage = state.viewer.getCurrentPage();
+    var pageIndex = currentPage - 1;
 
-  function handleRotatePage(pageIndex) {
-    window.UIHandler.showLoading('Rotating page...');
+    showLoading('Rotating page...');
 
     try {
-      state.pdfDoc = window.PDFOperations.rotatePage(state.pdfDoc, pageIndex, 90);
+      state.pdfDoc = window.PDFOperations.rotatePage(state.pdfDoc, pageIndex, degrees);
 
       state.pdfDoc.save()
         .then(function(pdfBytes) {
@@ -335,31 +306,36 @@
         })
         .then(function(pdfJsDoc) {
           state.pdfJsDoc = pdfJsDoc;
-          return renderPages();
+          state.viewer.refresh(pdfJsDoc);
+          hideLoading();
         })
         .catch(function(error) {
+          hideLoading();
           alert('Failed to rotate page: ' + error.message);
-          window.UIHandler.hideLoading();
         });
     } catch (error) {
+      hideLoading();
       alert('Failed to rotate page: ' + error.message);
-      window.UIHandler.hideLoading();
     }
   }
 
-  function handleDeletePage(pageIndex) {
-    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
+  /**
+   * Handle delete page
+   */
+  function handleDeletePage() {
+    if (!state.pdfDoc || !state.viewer) return;
 
+    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
     if (pageCount <= 1) {
       alert('Cannot delete the last page');
       return;
     }
 
-    if (!confirm('Delete page ' + (pageIndex + 1) + '?')) {
-      return;
-    }
+    var currentPage = state.viewer.getCurrentPage();
+    if (!confirm('Delete page ' + currentPage + '?')) return;
 
-    window.UIHandler.showLoading('Deleting page...');
+    var pageIndex = currentPage - 1;
+    showLoading('Deleting page...');
 
     try {
       state.pdfDoc = window.PDFOperations.deletePages(state.pdfDoc, [pageIndex]);
@@ -370,216 +346,244 @@
         })
         .then(function(pdfJsDoc) {
           state.pdfJsDoc = pdfJsDoc;
-          window.UIHandler.updatePageCount(window.PDFOperations.getPageCount(state.pdfDoc));
-          return renderPages();
+          state.viewer.refresh(pdfJsDoc);
+          updatePageIndicator(
+            Math.min(currentPage, pdfJsDoc.numPages),
+            pdfJsDoc.numPages
+          );
+          hideLoading();
         })
         .catch(function(error) {
+          hideLoading();
           alert('Failed to delete page: ' + error.message);
-          window.UIHandler.hideLoading();
         });
     } catch (error) {
+      hideLoading();
       alert('Failed to delete page: ' + error.message);
-      window.UIHandler.hideLoading();
     }
   }
 
-  function handlePageSelect(pageIndex, selected) {
-    // Selection state is managed by UI handler
-  }
+  /**
+   * Handle extract page
+   */
+  function handleExtractPage() {
+    if (!state.pdfDoc || !state.viewer) return;
 
-  function handlePageReorder(fromIndex, toIndex) {
-    window.UIHandler.showLoading('Reordering pages...');
+    var currentPage = state.viewer.getCurrentPage();
+    var pageIndex = currentPage - 1;
 
-    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
-    var newOrder = [];
-    for (var i = 0; i < pageCount; i++) {
-      newOrder.push(i);
-    }
+    showLoading('Extracting page...');
 
-    var removed = newOrder.splice(fromIndex, 1)[0];
-    newOrder.splice(toIndex, 0, removed);
-
-    window.PDFOperations.reorderPages(state.pdfDoc, newOrder)
-      .then(function(newPdfDoc) {
-        state.pdfDoc = newPdfDoc;
-        return state.pdfDoc.save();
-      })
-      .then(function(pdfBytes) {
-        return window.pdfjsLib.getDocument({ data: pdfBytes }).promise;
-      })
-      .then(function(pdfJsDoc) {
-        state.pdfJsDoc = pdfJsDoc;
-        return renderPages();
-      })
-      .catch(function(error) {
-        alert('Failed to reorder pages: ' + error.message);
-        window.UIHandler.hideLoading();
-      });
-  }
-
-  function handleMerge() {
-    elements.mergeInput.click();
-  }
-
-  function handleMergeFiles(e) {
-    var files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    window.UIHandler.showLoading('Merging PDFs...');
-
-    var additionalDocs = [];
-    var loadPromise = Promise.resolve();
-
-    files.forEach(function(file) {
-      loadPromise = loadPromise
-        .then(function() {
-          return window.FileHandler.loadPDFFile(file);
-        })
-        .then(function(result) {
-          return window.PDFOperations.loadPDFDocument(result.data);
-        })
-        .then(function(doc) {
-          additionalDocs.push(doc);
-        });
-    });
-
-    loadPromise
-      .then(function() {
-        return window.PDFOperations.mergePDFs([state.pdfDoc].concat(additionalDocs));
-      })
-      .then(function(mergedDoc) {
-        state.pdfDoc = mergedDoc;
-        return state.pdfDoc.save();
-      })
-      .then(function(pdfBytes) {
-        return window.pdfjsLib.getDocument({ data: pdfBytes }).promise;
-      })
-      .then(function(pdfJsDoc) {
-        state.pdfJsDoc = pdfJsDoc;
-        window.UIHandler.updatePageCount(window.PDFOperations.getPageCount(state.pdfDoc));
-        return renderPages();
-      })
-      .then(function() {
-        alert('Merged ' + files.length + ' PDF(s) successfully');
-      })
-      .catch(function(error) {
-        alert('Failed to merge: ' + error.message);
-      })
-      .finally(function() {
-        elements.mergeInput.value = '';
-        window.UIHandler.hideLoading();
-      });
-  }
-
-  function handleSplit() {
-    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
-
-    if (!confirm('Split into ' + pageCount + ' individual PDF files?')) {
-      return;
-    }
-
-    window.UIHandler.showLoading('Splitting PDF...');
-
-    window.PDFOperations.splitPDF(state.pdfDoc)
-      .then(function(splitDocs) {
-        var baseName = state.fileName.replace('.pdf', '');
-        return window.FileHandler.exportMultiplePDFs(splitDocs, baseName);
-      })
-      .then(function() {
-        alert('Split into ' + pageCount + ' files');
-      })
-      .catch(function(error) {
-        alert('Failed to split: ' + error.message);
-      })
-      .finally(function() {
-        window.UIHandler.hideLoading();
-      });
-  }
-
-  function handleExtract() {
-    var selectedIndices = window.UIHandler.getSelectedPageIndices(elements.pageGrid);
-
-    if (selectedIndices.length === 0) {
-      alert('Please select pages to extract');
-      return;
-    }
-
-    window.UIHandler.showLoading('Extracting pages...');
-
-    window.PDFOperations.extractPages(state.pdfDoc, selectedIndices)
+    window.PDFOperations.extractPages(state.pdfDoc, [pageIndex])
       .then(function(extractedDoc) {
         var baseName = state.fileName.replace('.pdf', '');
-        return window.FileHandler.exportPDF(extractedDoc, baseName + '_extracted.pdf');
+        return window.FileHandler.exportPDF(extractedDoc, baseName + '_page' + currentPage + '.pdf');
       })
       .then(function() {
-        alert('Extracted ' + selectedIndices.length + ' page(s)');
+        hideLoading();
+        alert('Page ' + currentPage + ' extracted');
       })
       .catch(function(error) {
-        alert('Failed to extract: ' + error.message);
-      })
-      .finally(function() {
-        window.UIHandler.hideLoading();
+        hideLoading();
+        alert('Failed to extract page: ' + error.message);
       });
   }
 
-  function handleDownload() {
-    window.UIHandler.showLoading('Preparing download...');
+  /**
+   * Handle merge
+   */
+  function handleMerge() {
+    state.modalManager.showMergeModal(function(files) {
+      if (files.length === 0) return;
 
-    window.FileHandler.exportPDF(state.pdfDoc, state.fileName)
-      .catch(function(error) {
-        alert('Failed to download: ' + error.message);
-      })
-      .finally(function() {
-        window.UIHandler.hideLoading();
+      showLoading('Merging PDFs...');
+
+      var additionalDocs = [];
+      var loadPromise = Promise.resolve();
+
+      files.forEach(function(file) {
+        loadPromise = loadPromise
+          .then(function() {
+            return window.FileHandler.loadPDFFile(file);
+          })
+          .then(function(result) {
+            return window.PDFOperations.loadPDFDocument(result.data);
+          })
+          .then(function(doc) {
+            additionalDocs.push(doc);
+          });
       });
-  }
 
-  // Redaction functions
-  function renderRedactionPage() {
-    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
-    elements.redactPageInfo.textContent = 'Page ' + (state.currentRedactPage + 1) + ' of ' + pageCount;
-    elements.redactPrevPage.disabled = state.currentRedactPage === 0;
-    elements.redactNextPage.disabled = state.currentRedactPage >= pageCount - 1;
-
-    return state.pdfJsDoc.getPage(state.currentRedactPage + 1)
-      .then(function(pdfJsPage) {
-        return window.UIHandler.renderPageForRedaction(
-          pdfJsPage,
-          elements.redactPageCanvas,
-          elements.redactOverlayCanvas
-        );
-      })
-      .then(function() {
-        if (!state.redactionBoxes[state.currentRedactPage]) {
-          state.redactionBoxes[state.currentRedactPage] = [];
-        }
-
-        var boxState = { boxes: state.redactionBoxes[state.currentRedactPage] };
-        window.UIHandler.setupRedactionDrawing(elements.redactOverlayCanvas, boxState, function(boxes) {
-          state.redactionBoxes[state.currentRedactPage] = boxes;
+      loadPromise
+        .then(function() {
+          return window.PDFOperations.mergePDFs([state.pdfDoc].concat(additionalDocs));
+        })
+        .then(function(mergedDoc) {
+          state.pdfDoc = mergedDoc;
+          return state.pdfDoc.save();
+        })
+        .then(function(pdfBytes) {
+          return window.pdfjsLib.getDocument({ data: pdfBytes }).promise;
+        })
+        .then(function(pdfJsDoc) {
+          state.pdfJsDoc = pdfJsDoc;
+          state.viewer.refresh(pdfJsDoc);
+          hideLoading();
+          alert('Merged ' + files.length + ' PDF(s) successfully');
+        })
+        .catch(function(error) {
+          hideLoading();
+          alert('Failed to merge: ' + error.message);
         });
-      });
+    });
   }
 
-  function navigateRedactPage(delta) {
-    var newPage = state.currentRedactPage + delta;
-    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
+  /**
+   * Handle split
+   */
+  function handleSplit() {
+    if (!state.pdfDoc) return;
 
-    if (newPage >= 0 && newPage < pageCount) {
-      state.currentRedactPage = newPage;
-      renderRedactionPage();
+    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
+    state.modalManager.showSplitModal(pageCount, function(options) {
+      showLoading('Splitting PDF...');
+
+      var splitPromise;
+
+      if (options.option === 'all') {
+        splitPromise = window.PDFOperations.splitPDF(state.pdfDoc);
+      } else if (options.option === 'every') {
+        splitPromise = splitEveryN(options.everyN);
+      } else if (options.option === 'at') {
+        splitPromise = splitAtPages(options.atPages);
+      }
+
+      splitPromise
+        .then(function(splitDocs) {
+          var baseName = state.fileName.replace('.pdf', '');
+          return window.FileHandler.exportMultiplePDFs(splitDocs, baseName);
+        })
+        .then(function() {
+          hideLoading();
+          alert('PDF split successfully');
+        })
+        .catch(function(error) {
+          hideLoading();
+          alert('Failed to split: ' + error.message);
+        });
+    });
+  }
+
+  /**
+   * Split every N pages
+   */
+  function splitEveryN(n) {
+    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
+    var ranges = [];
+
+    for (var i = 0; i < pageCount; i += n) {
+      var end = Math.min(i + n - 1, pageCount - 1);
+      var pageIndices = [];
+      for (var j = i; j <= end; j++) {
+        pageIndices.push(j);
+      }
+      ranges.push(pageIndices);
+    }
+
+    return Promise.all(ranges.map(function(indices) {
+      return window.PDFOperations.extractPages(state.pdfDoc, indices);
+    }));
+  }
+
+  /**
+   * Split at specific pages
+   */
+  function splitAtPages(splitPoints) {
+    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
+    var ranges = [];
+    var start = 0;
+
+    splitPoints.forEach(function(point) {
+      if (point > start && point <= pageCount) {
+        var indices = [];
+        for (var i = start; i < point; i++) {
+          indices.push(i);
+        }
+        ranges.push(indices);
+        start = point;
+      }
+    });
+
+    // Add remaining pages
+    if (start < pageCount) {
+      var remaining = [];
+      for (var i = start; i < pageCount; i++) {
+        remaining.push(i);
+      }
+      ranges.push(remaining);
+    }
+
+    return Promise.all(ranges.map(function(indices) {
+      return window.PDFOperations.extractPages(state.pdfDoc, indices);
+    }));
+  }
+
+  /**
+   * Handle reorder
+   */
+  function handleReorder() {
+    if (!state.pdfJsDoc) return;
+
+    state.modalManager.showReorderModal(state.pdfJsDoc, function(newOrder) {
+      showLoading('Reordering pages...');
+
+      window.PDFOperations.reorderPages(state.pdfDoc, newOrder)
+        .then(function(newPdfDoc) {
+          state.pdfDoc = newPdfDoc;
+          return state.pdfDoc.save();
+        })
+        .then(function(pdfBytes) {
+          return window.pdfjsLib.getDocument({ data: pdfBytes }).promise;
+        })
+        .then(function(pdfJsDoc) {
+          state.pdfJsDoc = pdfJsDoc;
+          state.viewer.refresh(pdfJsDoc);
+          hideLoading();
+        })
+        .catch(function(error) {
+          hideLoading();
+          alert('Failed to reorder pages: ' + error.message);
+        });
+    });
+  }
+
+  /**
+   * Handle redact mode enable
+   */
+  function handleRedactModeEnable() {
+    if (state.viewer) {
+      state.viewer.enableRedactMode();
     }
   }
 
-  function clearRedactionBoxes() {
-    state.redactionBoxes[state.currentRedactPage] = [];
-    renderRedactionPage();
+  /**
+   * Handle redact mode disable
+   */
+  function handleRedactModeDisable() {
+    if (state.viewer) {
+      state.viewer.disableRedactMode();
+    }
   }
 
-  function applyRedaction() {
-    var hasRedactions = Object.keys(state.redactionBoxes).some(function(key) {
-      var boxes = state.redactionBoxes[key];
-      return boxes && boxes.length > 0;
+  /**
+   * Handle apply redaction
+   */
+  function handleApplyRedaction() {
+    if (!state.pdfDoc || !state.viewer) return;
+
+    var boxes = state.viewer.getRedactionBoxes();
+    var hasRedactions = Object.keys(boxes).some(function(key) {
+      return boxes[key] && boxes[key].length > 0;
     });
 
     if (!hasRedactions) {
@@ -591,13 +595,29 @@
       return;
     }
 
-    window.UIHandler.showLoading('Applying redaction...');
+    showLoading('Applying redaction...');
+
+    // Convert boxes to the format expected by Redaction module
+    // Need to account for current scale
+    var scale = state.viewer.getScale();
+    var scaledBoxes = {};
+
+    Object.keys(boxes).forEach(function(pageIndex) {
+      scaledBoxes[pageIndex] = boxes[pageIndex].map(function(box) {
+        return {
+          x: box.x / scale,
+          y: box.y / scale,
+          width: box.width / scale,
+          height: box.height / scale
+        };
+      });
+    });
 
     window.PDFOperations.copyPDFDocument(state.pdfDoc)
       .then(function(pdfDocCopy) {
         state.pdfDoc = pdfDocCopy;
-        return window.Redaction.applyRedactions(state.pdfDoc, state.pdfJsDoc, state.redactionBoxes, function(current, total) {
-          window.UIHandler.showLoading('Redacting page ' + current + ' of ' + total + '...');
+        return window.Redaction.applyRedactions(state.pdfDoc, state.pdfJsDoc, scaledBoxes, function(current, total) {
+          showLoading('Redacting page ' + current + ' of ' + total + '...');
         });
       })
       .then(function() {
@@ -608,175 +628,99 @@
       })
       .then(function(pdfJsDoc) {
         state.pdfJsDoc = pdfJsDoc;
-        state.redactionBoxes = {};
-        return renderRedactionPage();
-      })
-      .then(function() {
+        state.viewer.clearRedactionBoxes();
+        state.viewer.disableRedactMode();
+        window.ToolsPanel.setRedactModeActive(false);
+        state.viewer.refresh(pdfJsDoc);
+        hideLoading();
         alert('Redaction applied successfully. Verify the result and download.');
       })
       .catch(function(error) {
+        hideLoading();
         alert('Redaction failed: ' + error.message);
         console.error('Redaction error:', error);
-      })
-      .finally(function() {
-        window.UIHandler.hideLoading();
       });
   }
 
-  // Signature functions
-  function refreshSignatureLibrary() {
-    return window.SignatureManager.loadSignatures()
-      .then(function(signatures) {
-        window.UIHandler.renderSignatureLibrary(signatures, elements.signatureList, {
-          onSelect: handleSignatureSelect,
-          onDelete: handleSignatureDelete
+  /**
+   * Handle clear redactions
+   */
+  function handleClearRedactions() {
+    if (state.viewer) {
+      state.viewer.clearRedactionBoxes();
+    }
+  }
+
+  /**
+   * Handle add signature
+   */
+  function handleAddSignature() {
+    state.modalManager.showAddSignatureModal(function(name, file) {
+      showLoading('Saving signature...');
+
+      window.SignatureManager.saveSignature(name, file)
+        .then(function() {
+          return state.toolsPanel.refreshSignatures();
+        })
+        .then(function() {
+          hideLoading();
+          alert('Signature saved');
+        })
+        .catch(function(error) {
+          hideLoading();
+          alert('Failed to save signature: ' + error.message);
         });
-      });
+    });
   }
 
-  function handleSignatureSelect(signature) {
-    state.selectedSignature = signature;
+  /**
+   * Handle select signature
+   */
+  function handleSelectSignature(signature) {
+    if (!state.viewer) return;
 
-    if (state.pdfDoc) {
-      elements.signatureLibrary.classList.add('hidden');
-      elements.signaturePlacementEl.classList.remove('hidden');
-      state.currentSignPage = 0;
-      renderSignaturePage();
-    }
+    state.viewer.startSignaturePlacement(signature);
   }
 
-  function handleSignatureDelete(signatureId) {
-    if (!confirm('Delete this signature?')) {
-      return;
-    }
-
-    window.SignatureManager.deleteSignature(signatureId)
-      .then(function() {
-        return refreshSignatureLibrary();
-      })
-      .catch(function(error) {
-        alert('Failed to delete: ' + error.message);
-      });
-  }
-
-  function showSignatureDialog() {
-    elements.signatureUploadDialog.classList.remove('hidden');
-    elements.signatureName.value = '';
-    elements.signatureFile.value = '';
-    elements.signaturePreviewContainer.classList.add('hidden');
-  }
-
-  function hideSignatureDialog() {
-    elements.signatureUploadDialog.classList.add('hidden');
-  }
-
-  function handleSignatureFileSelect(e) {
-    var file = e.target.files[0];
-    if (!file) return;
-
-    var validation = window.FileHandler.validateSignatureImage(file);
-    if (!validation.valid) {
-      alert(validation.error);
-      return;
-    }
-
-    window.FileHandler.readFileAsDataURL(file)
-      .then(function(dataURL) {
-        elements.signaturePreview.src = dataURL;
-        elements.signaturePreviewContainer.classList.remove('hidden');
-      });
-  }
-
-  function handleSaveSignature() {
-    var name = elements.signatureName.value.trim();
-    var file = elements.signatureFile.files[0];
-
-    if (!file) {
-      alert('Please select an image file');
-      return;
-    }
-
-    window.UIHandler.showLoading('Saving signature...');
-
-    window.SignatureManager.saveSignature(name || 'Signature', file)
-      .then(function() {
-        hideSignatureDialog();
-        return refreshSignatureLibrary();
-      })
-      .then(function() {
-        alert('Signature saved');
-      })
-      .catch(function(error) {
-        alert('Failed to save: ' + error.message);
-      })
-      .finally(function() {
-        window.UIHandler.hideLoading();
-      });
-  }
-
-  function renderSignaturePage() {
-    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
-    elements.signPageInfo.textContent = 'Page ' + (state.currentSignPage + 1) + ' of ' + pageCount;
-    elements.signPrevPage.disabled = state.currentSignPage === 0;
-    elements.signNextPage.disabled = state.currentSignPage >= pageCount - 1;
-
-    return state.pdfJsDoc.getPage(state.currentSignPage + 1)
-      .then(function(pdfJsPage) {
-        return window.UIHandler.renderPageForRedaction(
-          pdfJsPage,
-          elements.signPageCanvas,
-          elements.signOverlayCanvas
-        );
-      })
-      .then(function() {
-        var placementState = {};
-        state.signaturePlacement = window.UIHandler.setupSignaturePlacement(
-          elements.signPageCanvas,
-          elements.signOverlayCanvas,
-          state.selectedSignature,
-          placementState
-        );
-      });
-  }
-
-  function navigateSignPage(delta) {
-    var newPage = state.currentSignPage + delta;
-    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
-
-    if (newPage >= 0 && newPage < pageCount) {
-      state.currentSignPage = newPage;
-      renderSignaturePage();
-    }
-  }
-
+  /**
+   * Handle place signature
+   */
   function handlePlaceSignature() {
-    if (!state.signaturePlacement || !state.selectedSignature) {
-      return;
-    }
+    if (!state.viewer || !state.pdfDoc) return;
 
-    window.UIHandler.showLoading('Placing signature...');
+    var placement = state.viewer.getSignaturePlacement();
+    if (!placement) return;
 
-    var placement = state.signaturePlacement.getPlacement();
+    showLoading('Placing signature...');
+
     var addTimestamp = elements.addTimestampCheck.checked;
 
-    state.pdfJsDoc.getPage(state.currentSignPage + 1)
-      .then(function(pdfJsPage) {
-        var viewport = pdfJsPage.getViewport({ scale: 1 });
-        var canvasScale = elements.signPageCanvas.width / viewport.width;
+    // Get the signature that was being placed
+    var signatureList = document.querySelectorAll('.signature-quick-item');
+    var selectedSig = null;
 
-        var pdfPlacement = {
-          x: placement.x / canvasScale,
-          y: placement.y / canvasScale,
-          width: placement.width / canvasScale,
-          height: placement.height / canvasScale,
-          rotation: placement.rotation
-        };
+    window.SignatureManager.loadSignatures()
+      .then(function(signatures) {
+        // Find the signature by checking which one matches current placement dimensions
+        selectedSig = signatures[0]; // Default to first signature
+        signatures.forEach(function(sig) {
+          if (Math.abs(sig.width - placement.width * placement.scale) < 50 &&
+              Math.abs(sig.height - placement.height * placement.scale) < 50) {
+            selectedSig = sig;
+          }
+        });
 
         return window.SignatureManager.insertSignatureIntoPDF(
           state.pdfDoc,
-          state.currentSignPage,
-          state.selectedSignature,
-          pdfPlacement,
+          placement.pageIndex,
+          selectedSig,
+          {
+            x: placement.x,
+            y: placement.y,
+            width: placement.width,
+            height: placement.height,
+            rotation: placement.rotation
+          },
           { addTimestamp: addTimestamp }
         );
       })
@@ -788,40 +732,72 @@
       })
       .then(function(pdfJsDoc) {
         state.pdfJsDoc = pdfJsDoc;
-        return renderSignaturePage();
-      })
-      .then(function() {
+        state.viewer.cancelSignaturePlacement();
+        elements.signaturePlacementOverlay.classList.add('hidden');
+        state.viewer.refresh(pdfJsDoc);
+        hideLoading();
         alert('Signature placed. Add more or download the PDF.');
       })
       .catch(function(error) {
+        hideLoading();
         alert('Failed to place signature: ' + error.message);
         console.error('Signature placement error:', error);
-      })
-      .finally(function() {
-        window.UIHandler.hideLoading();
       });
   }
 
-  function cancelSignaturePlacement() {
-    state.selectedSignature = null;
-    state.signaturePlacement = null;
-    elements.signaturePlacementEl.classList.add('hidden');
-    elements.signatureLibrary.classList.remove('hidden');
+  /**
+   * Handle cancel signature placement
+   */
+  function handleCancelSignaturePlacement() {
+    if (state.viewer) {
+      state.viewer.cancelSignaturePlacement();
+    }
+    elements.signaturePlacementOverlay.classList.add('hidden');
+  }
 
-    elements.signatureList.querySelectorAll('.signature-item').forEach(function(item) {
-      item.classList.remove('selected');
-    });
+  /**
+   * Handle download
+   */
+  function handleDownload() {
+    if (!state.pdfDoc) return;
+
+    showLoading('Preparing download...');
+
+    window.FileHandler.exportPDF(state.pdfDoc, state.fileName)
+      .then(function() {
+        hideLoading();
+      })
+      .catch(function(error) {
+        hideLoading();
+        alert('Failed to download: ' + error.message);
+      });
+  }
+
+  /**
+   * Show loading overlay
+   */
+  function showLoading(message) {
+    var overlay = document.getElementById('loading-overlay');
+    var text = document.getElementById('loading-text');
+    if (text) text.textContent = message || 'Processing...';
+    if (overlay) overlay.classList.remove('hidden');
+  }
+
+  /**
+   * Hide loading overlay
+   */
+  function hideLoading() {
+    var overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.add('hidden');
   }
 
   // Wait for libraries to be ready
-  // The module script fires 'libs-ready' after PDF.js is loaded
   window.addEventListener('libs-ready', function() {
     console.log('libs-ready event received');
     init();
   });
 
-  // Fallback: if libs-ready already fired or module loaded before this script
-  // Check after a short delay
+  // Fallback: if libs-ready already fired
   setTimeout(function() {
     if (window.pdfjsLib && !window._pdfToolInitialized) {
       console.log('Fallback init - pdfjsLib already available');

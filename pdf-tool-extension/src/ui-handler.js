@@ -1,153 +1,71 @@
 /**
  * UI Handler Module
- * Manages UI rendering and interactions
+ * Legacy functions retained for compatibility
+ * Most rendering has moved to viewer.js, tools-panel.js, and modal-manager.js
  */
 
 (function() {
   'use strict';
 
   /**
-   * Render PDF page thumbnails for page management
+   * Show loading overlay
    */
-  async function renderPageThumbnails(pdfJsDoc, container, options) {
-    options = options || {};
-    container.innerHTML = '';
-
-    const pageCount = pdfJsDoc.numPages;
-    const scale = 0.3;
-
-    for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
-      try {
-        const page = await pdfJsDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale });
-
-        const pageItem = document.createElement('div');
-        pageItem.className = 'page-item';
-        pageItem.dataset.pageIndex = pageNum - 1;
-        pageItem.draggable = true;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        // Add canvas to DOM first (some browsers need this)
-        pageItem.appendChild(canvas);
-        container.appendChild(pageItem);
-
-        const context = canvas.getContext('2d');
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-
-        // Add other elements after render
-        const pageLabel = document.createElement('span');
-        pageLabel.className = 'page-number';
-        pageLabel.textContent = pageNum;
-        pageItem.appendChild(pageLabel);
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'select-checkbox';
-        checkbox.addEventListener('change', function() {
-          pageItem.classList.toggle('selected', checkbox.checked);
-          if (options.onSelect) {
-            options.onSelect(pageNum - 1, checkbox.checked);
-          }
-        });
-        pageItem.appendChild(checkbox);
-
-        const controls = document.createElement('div');
-        controls.className = 'page-controls';
-
-        const rotateBtn = createControlButton('rotate', '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z"/></svg>');
-        rotateBtn.title = 'Rotate 90°';
-        rotateBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          if (options.onRotate) {
-            options.onRotate(pageNum - 1);
-          }
-        });
-        controls.appendChild(rotateBtn);
-
-        const deleteBtn = createControlButton('delete', '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>');
-        deleteBtn.title = 'Delete page';
-        deleteBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          if (options.onDelete) {
-            options.onDelete(pageNum - 1);
-          }
-        });
-        controls.appendChild(deleteBtn);
-
-        pageItem.appendChild(controls);
-        setupDragAndDrop(pageItem, container, options.onReorder);
-      } catch (error) {
-        console.error('Error rendering page ' + pageNum + ':', error);
-      }
-    }
-  }
-
-  function createControlButton(className, innerHTML) {
-    const btn = document.createElement('button');
-    btn.className = 'page-control-btn ' + className;
-    btn.innerHTML = innerHTML;
-    return btn;
-  }
-
-  function setupDragAndDrop(pageItem, container, onReorder) {
-    pageItem.addEventListener('dragstart', function(e) {
-      pageItem.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', pageItem.dataset.pageIndex);
-    });
-
-    pageItem.addEventListener('dragend', function() {
-      pageItem.classList.remove('dragging');
-      container.querySelectorAll('.page-item').forEach(function(item) {
-        item.classList.remove('drag-over');
-      });
-    });
-
-    pageItem.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      pageItem.classList.add('drag-over');
-    });
-
-    pageItem.addEventListener('dragleave', function() {
-      pageItem.classList.remove('drag-over');
-    });
-
-    pageItem.addEventListener('drop', function(e) {
-      e.preventDefault();
-      pageItem.classList.remove('drag-over');
-
-      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-      const toIndex = parseInt(pageItem.dataset.pageIndex);
-
-      if (fromIndex !== toIndex && onReorder) {
-        onReorder(fromIndex, toIndex);
-      }
-    });
+  function showLoading(message) {
+    message = message || 'Processing...';
+    var overlay = document.getElementById('loading-overlay');
+    var text = document.getElementById('loading-text');
+    if (text) text.textContent = message;
+    if (overlay) overlay.classList.remove('hidden');
   }
 
   /**
-   * Render a page for redaction editing
+   * Hide loading overlay
+   */
+  function hideLoading() {
+    var overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  /**
+   * Show an alert/notification
+   */
+  function showAlert(message, type) {
+    alert(message);
+  }
+
+  /**
+   * Show a confirmation dialog
+   */
+  function showConfirm(message) {
+    return confirm(message);
+  }
+
+  /**
+   * Update page count display (legacy - now handled by popup.js)
+   */
+  function updatePageCount(count) {
+    var totalPages = document.getElementById('total-pages');
+    if (totalPages) {
+      totalPages.textContent = count;
+    }
+  }
+
+  /**
+   * Render a page for redaction editing (legacy, used for backward compat)
    */
   async function renderPageForRedaction(pdfJsPage, pageCanvas, overlayCanvas, maxWidth) {
     maxWidth = maxWidth || 500;
 
-    const baseViewport = pdfJsPage.getViewport({ scale: 1 });
-    const scale = maxWidth / baseViewport.width;
-    const viewport = pdfJsPage.getViewport({ scale });
+    var baseViewport = pdfJsPage.getViewport({ scale: 1 });
+    var scale = maxWidth / baseViewport.width;
+    var viewport = pdfJsPage.getViewport({ scale: scale });
 
     pageCanvas.width = viewport.width;
     pageCanvas.height = viewport.height;
     overlayCanvas.width = viewport.width;
     overlayCanvas.height = viewport.height;
 
-    const context = pageCanvas.getContext('2d');
+    var context = pageCanvas.getContext('2d');
     await pdfJsPage.render({
       canvasContext: context,
       viewport: viewport
@@ -161,13 +79,13 @@
   }
 
   /**
-   * Setup redaction box drawing on overlay canvas
+   * Setup redaction box drawing on overlay canvas (legacy)
    */
   function setupRedactionDrawing(overlayCanvas, state, onBoxesChange) {
-    const ctx = overlayCanvas.getContext('2d');
-    let isDrawing = false;
-    let startX, startY;
-    let currentBox = null;
+    var ctx = overlayCanvas.getContext('2d');
+    var isDrawing = false;
+    var startX, startY;
+    var currentBox = null;
 
     if (!state.boxes) {
       state.boxes = [];
@@ -180,8 +98,8 @@
       ctx.strokeStyle = '#e74c3c';
       ctx.lineWidth = 2;
 
-      for (let i = 0; i < state.boxes.length; i++) {
-        const box = state.boxes[i];
+      for (var i = 0; i < state.boxes.length; i++) {
+        var box = state.boxes[i];
         ctx.fillRect(box.x, box.y, box.width, box.height);
         ctx.strokeRect(box.x, box.y, box.width, box.height);
       }
@@ -193,7 +111,7 @@
     }
 
     function getMousePos(e) {
-      const rect = overlayCanvas.getBoundingClientRect();
+      var rect = overlayCanvas.getBoundingClientRect();
       return {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top
@@ -203,7 +121,7 @@
     overlayCanvas.addEventListener('mousedown', function(e) {
       if (e.button !== 0) return;
 
-      const pos = getMousePos(e);
+      var pos = getMousePos(e);
       isDrawing = true;
       startX = pos.x;
       startY = pos.y;
@@ -213,7 +131,7 @@
     overlayCanvas.addEventListener('mousemove', function(e) {
       if (!isDrawing) return;
 
-      const pos = getMousePos(e);
+      var pos = getMousePos(e);
       currentBox = {
         x: Math.min(startX, pos.x),
         y: Math.min(startY, pos.y),
@@ -247,10 +165,10 @@
 
     overlayCanvas.addEventListener('contextmenu', function(e) {
       e.preventDefault();
-      const pos = getMousePos(e);
+      var pos = getMousePos(e);
 
-      for (let i = state.boxes.length - 1; i >= 0; i--) {
-        const box = state.boxes[i];
+      for (var i = state.boxes.length - 1; i >= 0; i--) {
+        var box = state.boxes[i];
         if (pos.x >= box.x && pos.x <= box.x + box.width &&
             pos.y >= box.y && pos.y <= box.y + box.height) {
           state.boxes.splice(i, 1);
@@ -279,70 +197,74 @@
   }
 
   /**
-   * Render signature library
+   * Render signature library (legacy)
    */
   function renderSignatureLibrary(signatures, container, options) {
     options = options || {};
     container.innerHTML = '';
 
     if (signatures.length === 0) {
-      const empty = document.createElement('div');
+      var empty = document.createElement('div');
       empty.className = 'empty-signatures';
       empty.textContent = 'No signatures saved. Click "Add Signature" to create one.';
       container.appendChild(empty);
       return;
     }
 
-    for (let i = 0; i < signatures.length; i++) {
-      const sig = signatures[i];
+    for (var i = 0; i < signatures.length; i++) {
+      var sig = signatures[i];
 
-      const item = document.createElement('div');
+      var item = document.createElement('div');
       item.className = 'signature-item';
       item.dataset.signatureId = sig.id;
 
-      const img = document.createElement('img');
+      var img = document.createElement('img');
       img.src = sig.imageData;
       img.alt = sig.name;
       item.appendChild(img);
 
-      const name = document.createElement('div');
+      var name = document.createElement('div');
       name.className = 'sig-name';
       name.textContent = sig.name;
       item.appendChild(name);
 
-      const deleteBtn = document.createElement('button');
+      var deleteBtn = document.createElement('button');
       deleteBtn.className = 'delete-sig-btn';
       deleteBtn.innerHTML = '&times;';
       deleteBtn.title = 'Delete signature';
-      deleteBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        if (options.onDelete) {
-          options.onDelete(sig.id);
-        }
-      });
+      deleteBtn.addEventListener('click', (function(sigId) {
+        return function(e) {
+          e.stopPropagation();
+          if (options.onDelete) {
+            options.onDelete(sigId);
+          }
+        };
+      })(sig.id));
       item.appendChild(deleteBtn);
 
-      item.addEventListener('click', function() {
-        container.querySelectorAll('.signature-item').forEach(function(el) {
-          el.classList.remove('selected');
-        });
-        item.classList.add('selected');
+      item.addEventListener('click', (function(signature) {
+        return function() {
+          container.querySelectorAll('.signature-item').forEach(function(el) {
+            el.classList.remove('selected');
+          });
+          item.classList.add('selected');
 
-        if (options.onSelect) {
-          options.onSelect(sig);
-        }
-      });
+          if (options.onSelect) {
+            options.onSelect(signature);
+          }
+        };
+      })(sig));
 
       container.appendChild(item);
     }
   }
 
   /**
-   * Setup signature placement on page
+   * Setup signature placement on page (legacy)
    */
   function setupSignaturePlacement(pageCanvas, overlayCanvas, signature, state) {
-    const ctx = overlayCanvas.getContext('2d');
-    const img = new Image();
+    var ctx = overlayCanvas.getContext('2d');
+    var img = new Image();
 
     state.x = 50;
     state.y = 50;
@@ -351,9 +273,9 @@
     state.rotation = 0;
     state.ready = false;
 
-    let isDragging = false;
-    let isResizing = false;
-    let dragOffsetX, dragOffsetY;
+    var isDragging = false;
+    var isResizing = false;
+    var dragOffsetX, dragOffsetY;
 
     img.onload = function() {
       state.ready = true;
@@ -383,7 +305,7 @@
     }
 
     function getMousePos(e) {
-      const rect = overlayCanvas.getBoundingClientRect();
+      var rect = overlayCanvas.getBoundingClientRect();
       return {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top
@@ -409,7 +331,7 @@
     }
 
     overlayCanvas.addEventListener('mousedown', function(e) {
-      const pos = getMousePos(e);
+      var pos = getMousePos(e);
 
       if (isInResizeHandle(pos)) {
         isResizing = true;
@@ -421,7 +343,7 @@
     });
 
     overlayCanvas.addEventListener('mousemove', function(e) {
-      const pos = getMousePos(e);
+      var pos = getMousePos(e);
 
       if (isDragging) {
         state.x = pos.x - dragOffsetX;
@@ -475,43 +397,10 @@
   }
 
   /**
-   * Show loading overlay
-   */
-  function showLoading(message) {
-    message = message || 'Processing...';
-    const overlay = document.getElementById('loading-overlay');
-    const text = document.getElementById('loading-text');
-    if (text) text.textContent = message;
-    if (overlay) overlay.classList.remove('hidden');
-  }
-
-  /**
-   * Hide loading overlay
-   */
-  function hideLoading() {
-    const overlay = document.getElementById('loading-overlay');
-    if (overlay) overlay.classList.add('hidden');
-  }
-
-  /**
-   * Show an alert/notification
-   */
-  function showAlert(message, type) {
-    alert(message);
-  }
-
-  /**
-   * Show a confirmation dialog
-   */
-  function showConfirm(message) {
-    return confirm(message);
-  }
-
-  /**
-   * Get selected page indices from the grid
+   * Get selected page indices from the grid (legacy)
    */
   function getSelectedPageIndices(container) {
-    const selected = [];
+    var selected = [];
     container.querySelectorAll('.page-item.selected').forEach(function(item) {
       selected.push(parseInt(item.dataset.pageIndex));
     });
@@ -519,27 +408,62 @@
   }
 
   /**
-   * Update page count display
+   * Render PDF page thumbnails for page management (legacy, for reorder modal)
    */
-  function updatePageCount(count) {
-    const el = document.getElementById('page-count');
-    if (el) {
-      el.textContent = count + ' page' + (count !== 1 ? 's' : '');
+  async function renderPageThumbnails(pdfJsDoc, container, options) {
+    options = options || {};
+    container.innerHTML = '';
+
+    var pageCount = pdfJsDoc.numPages;
+    var scale = 0.3;
+
+    for (var pageNum = 1; pageNum <= pageCount; pageNum++) {
+      try {
+        var page = await pdfJsDoc.getPage(pageNum);
+        var viewport = page.getViewport({ scale: scale });
+
+        var pageItem = document.createElement('div');
+        pageItem.className = 'page-item';
+        pageItem.dataset.pageIndex = pageNum - 1;
+        pageItem.draggable = true;
+
+        var canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        pageItem.appendChild(canvas);
+        container.appendChild(pageItem);
+
+        var context = canvas.getContext('2d');
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+
+        var pageLabel = document.createElement('span');
+        pageLabel.className = 'page-number';
+        pageLabel.textContent = pageNum;
+        pageItem.appendChild(pageLabel);
+
+      } catch (error) {
+        console.error('Error rendering page ' + pageNum + ':', error);
+      }
     }
   }
 
   // Expose to global scope
   window.UIHandler = {
-    renderPageThumbnails: renderPageThumbnails,
-    renderPageForRedaction: renderPageForRedaction,
-    setupRedactionDrawing: setupRedactionDrawing,
-    renderSignatureLibrary: renderSignatureLibrary,
-    setupSignaturePlacement: setupSignaturePlacement,
     showLoading: showLoading,
     hideLoading: hideLoading,
     showAlert: showAlert,
     showConfirm: showConfirm,
+    updatePageCount: updatePageCount,
+    renderPageForRedaction: renderPageForRedaction,
+    setupRedactionDrawing: setupRedactionDrawing,
+    renderSignatureLibrary: renderSignatureLibrary,
+    setupSignaturePlacement: setupSignaturePlacement,
     getSelectedPageIndices: getSelectedPageIndices,
-    updatePageCount: updatePageCount
+    renderPageThumbnails: renderPageThumbnails
   };
+
 })();
