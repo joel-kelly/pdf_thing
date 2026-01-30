@@ -334,6 +334,70 @@
     },
 
     /**
+     * Show modal for merge position selection
+     */
+    showMergeModal: function(currentPageCount, onConfirm) {
+      this.showModal({
+        title: 'Merge PDFs',
+        body: '\
+          <div class="form-group">\
+            <label>Insert Position</label>\
+            <div style="margin-top: 8px;">\
+              <label style="display: block; margin-bottom: 8px; cursor: pointer;">\
+                <input type="radio" name="merge-position" value="end" checked>\
+                At the end (after page ' + currentPageCount + ')\
+              </label>\
+              <label style="display: block; margin-bottom: 8px; cursor: pointer;">\
+                <input type="radio" name="merge-position" value="start">\
+                At the beginning (before page 1)\
+              </label>\
+              <label style="display: block; cursor: pointer;">\
+                <input type="radio" name="merge-position" value="after">\
+                After specific page\
+              </label>\
+              <div id="after-page-container" style="margin-left: 24px; margin-top: 8px; display: none;">\
+                <input type="number" id="merge-after-page" value="1" min="1" max="' + currentPageCount + '" style="width: 80px; padding: 4px 8px;">\
+                <span style="font-size: 12px; color: #666;"> (1-' + currentPageCount + ')</span>\
+              </div>\
+            </div>\
+          </div>',
+        buttons: [
+          { text: 'Cancel', action: 'cancel' },
+          { text: 'Select Files', action: 'confirm', primary: true }
+        ],
+        onAction: function(action) {
+          if (action === 'confirm') {
+            var position = document.querySelector('input[name="merge-position"]:checked').value;
+            var insertAfter;
+
+            if (position === 'end') {
+              insertAfter = currentPageCount;
+            } else if (position === 'start') {
+              insertAfter = 0;
+            } else {
+              insertAfter = parseInt(document.getElementById('merge-after-page').value, 10);
+              if (isNaN(insertAfter) || insertAfter < 1) insertAfter = 1;
+              if (insertAfter > currentPageCount) insertAfter = currentPageCount;
+            }
+
+            onConfirm(insertAfter);
+          }
+        }
+      });
+
+      // Setup radio button handlers
+      setTimeout(function() {
+        var radios = document.querySelectorAll('input[name="merge-position"]');
+        radios.forEach(function(radio) {
+          radio.addEventListener('change', function() {
+            document.getElementById('after-page-container').style.display =
+              radio.value === 'after' ? 'block' : 'none';
+          });
+        });
+      }, 0);
+    },
+
+    /**
      * Show modal for adding signature
      */
     showAddSignatureModal: function(onSave) {

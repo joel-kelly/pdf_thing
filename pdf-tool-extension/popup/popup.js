@@ -12,7 +12,8 @@
     pdfJsDoc: null,      // PDF.js document
     pdfData: null,       // Raw PDF bytes
     fileName: 'document.pdf',
-    selectedSignature: null
+    selectedSignature: null,
+    mergeInsertAfter: null  // Page index to insert merged PDFs after
   };
 
   // DOM Elements
@@ -374,7 +375,14 @@
    * Handle merge button click
    */
   function handleMerge() {
-    elements.mergeInput.click();
+    var pageCount = window.PDFOperations.getPageCount(state.pdfDoc);
+
+    window.ToolsPanel.showMergeModal(pageCount, function(insertAfterPage) {
+      window.ToolsPanel.hideModal();
+      // Store the insert position and open file picker
+      state.mergeInsertAfter = insertAfterPage;
+      elements.mergeInput.click();
+    });
   }
 
   /**
@@ -384,6 +392,7 @@
     var files = Array.from(e.target.files);
     if (files.length === 0) return;
 
+    var insertAfterPage = state.mergeInsertAfter || window.PDFOperations.getPageCount(state.pdfDoc);
     showLoading('Merging PDFs...');
 
     var additionalDocs = [];
@@ -404,7 +413,7 @@
 
     loadPromise
       .then(function() {
-        return window.PDFOperations.mergePDFs([state.pdfDoc].concat(additionalDocs));
+        return mergeAtPosition(state.pdfDoc, additionalDocs, insertAfterPage);
       })
       .then(function(mergedDoc) {
         state.pdfDoc = mergedDoc;
@@ -421,14 +430,55 @@
       })
       .then(function() {
         hideLoading();
+        state.mergeInsertAfter = null;
         alert('Merged ' + files.length + ' PDF(s) successfully');
       })
       .catch(function(error) {
         hideLoading();
+        state.mergeInsertAfter = null;
         alert('Failed to merge: ' + error.message);
       })
       .finally(function() {
         elements.mergeInput.value = '';
+      });
+  }
+
+  /**
+   * Merge PDFs at a specific position
+   */
+  function mergeAtPosition(basePdfDoc, additionalDocs, insertAfterPage) {
+    var basePageCount = basePdfDoc.getPageCount();
+
+    // If inserting at the end, just use standard merge
+    if (insertAfterPage >= basePageCount) {
+      return window.PDFOperations.mergePDFs([basePdfDoc].concat(additionalDocs));
+    }
+
+    // Otherwise, we need to reorder after merge
+    return window.PDFOperations.mergePDFs([basePdfDoc].concat(additionalDocs))
+      .then(function(mergedDoc) {
+        // Calculate the new order:
+        // Pages 0 to insertAfterPage-1, then new pages, then remaining original pages
+        var totalPages = mergedDoc.getPageCount();
+        var newPagesCount = totalPages - basePageCount;
+        var newOrder = [];
+
+        // Pages before insert point (0 to insertAfterPage-1)
+        for (var i = 0; i < insertAfterPage; i++) {
+          newOrder.push(i);
+        }
+
+        // New pages (originally at positions basePageCount to totalPages-1)
+        for (var j = basePageCount; j < totalPages; j++) {
+          newOrder.push(j);
+        }
+
+        // Remaining original pages (insertAfterPage to basePageCount-1)
+        for (var k = insertAfterPage; k < basePageCount; k++) {
+          newOrder.push(k);
+        }
+
+        return window.PDFOperations.reorderPages(mergedDoc, newOrder);
       });
   }
 

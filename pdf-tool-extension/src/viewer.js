@@ -637,6 +637,12 @@
       wrapper.onclick = function(e) {
         if (!self.signatureMode || !self.selectedSignature) return;
 
+        // Don't create new signature if one already exists (prevents re-creation on resize/drag mouseup)
+        if (wrapper.querySelector('.signature-preview')) return;
+
+        // Don't create if click originated from signature element
+        if (e.target.closest('.signature-preview')) return;
+
         var rect = wrapper.getBoundingClientRect();
         var x = e.clientX - rect.left;
         var y = e.clientY - rect.top;
@@ -680,7 +686,12 @@
 
       wrapper.appendChild(preview);
 
-      // Make draggable
+      // Stop clicks on preview from bubbling to wrapper
+      preview.onclick = function(e) {
+        e.stopPropagation();
+      };
+
+      // Make draggable and resizable
       this.makeSignatureDraggable(preview, wrapper);
       this.makeSignatureResizable(preview, resizeHandle);
 
