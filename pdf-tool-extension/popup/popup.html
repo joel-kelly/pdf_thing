@@ -9,179 +9,242 @@
   <div id="app">
     <!-- Header -->
     <header id="header">
-      <h1>PDF Tool</h1>
-      <span id="page-count"></span>
+      <div class="header-left">
+        <h1>PDF Tool</h1>
+      </div>
+      <div class="header-center">
+        <div id="zoom-controls" class="hidden">
+          <button id="zoom-out-btn" class="header-btn" title="Zoom Out">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M19,13H5V11H19V13Z"/>
+            </svg>
+          </button>
+          <select id="zoom-select" class="zoom-select">
+            <option value="fit-width">Fit Width</option>
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1" selected>100%</option>
+            <option value="1.25">125%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+          </select>
+          <button id="zoom-in-btn" class="header-btn" title="Zoom In">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="header-right">
+        <span id="page-indicator" class="hidden">Page <span id="current-page">1</span> of <span id="total-pages">1</span></span>
+      </div>
     </header>
 
-    <!-- File Upload Area -->
-    <div id="upload-area" class="dropzone">
-      <div class="dropzone-content">
-        <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12,19L8,15H10.5V12H13.5V15H16L12,19Z"/>
-        </svg>
-        <p>Drop PDF here or click to upload</p>
-        <span class="hint">Maximum file size: 50MB</span>
-      </div>
-      <input type="file" id="file-input" accept=".pdf" hidden>
-    </div>
-
-    <!-- Mode Selection -->
-    <div id="mode-selector" class="hidden">
-      <button id="page-mode-btn" class="mode-btn active" data-mode="pages">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-        </svg>
-        Pages
-      </button>
-      <button id="redact-mode-btn" class="mode-btn" data-mode="redact">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M2,4V6H4V4H2M4,2H2A2,2 0 0,0 0,4V6H4V4H6V2H4M22,4V6H20V4H22M20,2H22A2,2 0 0,1 24,4V6H20V4H18V2H20M2,20V18H4V20H2M4,22H2A2,2 0 0,1 0,20V18H4V20H6V22H4M22,20V18H20V20H22M20,22H22A2,2 0 0,0 24,20V18H20V20H18V22H20M8,6H16V8H8V6M8,10H16V12H8V10M8,14H12V16H8V14Z"/>
-        </svg>
-        Redact
-      </button>
-      <button id="signature-mode-btn" class="mode-btn" data-mode="signature">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M21.04 12.13c-.14 0-.28.06-.39.17l-1 1 2.05 2.05 1-1c.22-.22.22-.56 0-.78l-1.27-1.27a.55.55 0 00-.39-.17m-1.97 1.75L13 19.94V22h2.06l6.06-6.06-2.05-2.06M10 21H5c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h9l5 5v2h-2V9h-4V5H5v14h5v2z"/>
-        </svg>
-        Sign
-      </button>
-    </div>
-
-    <!-- Page Management View -->
-    <div id="page-management" class="view hidden">
-      <div id="page-grid"></div>
-
-      <div id="page-actions" class="action-bar">
-        <button id="merge-btn" class="action-btn" title="Merge with another PDF">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M19,20H5V4H7V7H17V4H19M12,2A1,1 0 0,1 13,3A1,1 0 0,1 12,4A1,1 0 0,1 11,3A1,1 0 0,1 12,2M19,2H14.82C14.4,0.84 13.3,0 12,0C10.7,0 9.6,0.84 9.18,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2Z"/>
+    <!-- Main Content -->
+    <main id="main-content">
+      <!-- File Upload Area (shown initially) -->
+      <div id="upload-area" class="dropzone">
+        <div class="dropzone-content">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M12,19L8,15H10.5V12H13.5V15H16L12,19Z"/>
           </svg>
-          Merge
-        </button>
-        <button id="split-btn" class="action-btn" title="Split into individual pages">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M14,4L8,4L8,8L14,8M20,20L14,20L14,16L20,16M20,4L14.5,4L14.5,8L20,8M8,20L8,16L2,16L2,20M8,14L2,14L2,10L8,10M20,14L14,14L14,10L20,10M8,8V4L2,4L2,8M14,14L8,14L8,10L14,10M14,20L8,20L8,16L14,16"/>
-          </svg>
-          Split
-        </button>
-        <button id="extract-btn" class="action-btn" title="Extract selected pages">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
-          </svg>
-          Extract
-        </button>
-        <button id="download-btn" class="action-btn primary" title="Download PDF">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
-          </svg>
-          Download
-        </button>
-      </div>
-
-      <!-- Merge file input (hidden) -->
-      <input type="file" id="merge-input" accept=".pdf" multiple hidden>
-    </div>
-
-    <!-- Redaction View -->
-    <div id="redaction-view" class="view hidden">
-      <div id="redaction-page-nav">
-        <button id="redact-prev-page" class="nav-btn">&lt;</button>
-        <span id="redact-page-info">Page 1 of 1</span>
-        <button id="redact-next-page" class="nav-btn">&gt;</button>
-      </div>
-
-      <div id="redaction-canvas-container">
-        <canvas id="redaction-page-canvas"></canvas>
-        <canvas id="redaction-overlay-canvas"></canvas>
-      </div>
-
-      <div id="redaction-controls" class="action-bar">
-        <button id="clear-boxes-btn" class="action-btn">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
-          </svg>
-          Clear All
-        </button>
-        <button id="apply-redaction-btn" class="action-btn primary">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
-          </svg>
-          Apply Redaction
-        </button>
-      </div>
-
-      <p class="warning">Redacted pages will be converted to images (text will not be selectable)</p>
-    </div>
-
-    <!-- Signature View -->
-    <div id="signature-view" class="view hidden">
-      <!-- Signature Library -->
-      <div id="signature-library">
-        <h3>Your Signatures</h3>
-        <div id="signature-list"></div>
-        <button id="add-signature-btn" class="action-btn">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-            <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
-          </svg>
-          Add Signature
-        </button>
-      </div>
-
-      <!-- Signature Upload Dialog (hidden by default) -->
-      <div id="signature-upload-dialog" class="dialog hidden">
-        <h3>Add Signature</h3>
-        <div class="form-group">
-          <label for="signature-name">Name</label>
-          <input type="text" id="signature-name" placeholder="e.g., Full Signature, Initials">
+          <p>Drop PDF here or click to upload</p>
+          <span class="hint">Maximum file size: 50MB</span>
         </div>
-        <div class="form-group">
-          <label>Image</label>
-          <div id="signature-dropzone" class="dropzone small">
-            <p>Drop image or click to upload</p>
-            <span class="hint">PNG or JPEG, max 500KB</span>
+        <input type="file" id="file-input" accept=".pdf" hidden>
+      </div>
+
+      <!-- PDF Workspace (shown after loading) -->
+      <div id="workspace" class="hidden">
+        <!-- PDF Viewer -->
+        <div id="pdf-viewer">
+          <div id="pages-container"></div>
+        </div>
+
+        <!-- Tools Panel -->
+        <aside id="tools-panel">
+          <!-- Page Tools -->
+          <div class="tool-group" data-group="page-tools">
+            <div class="tool-group-header">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+              </svg>
+              <span>Page Tools</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/>
+              </svg>
+            </div>
+            <div class="tool-group-content">
+              <p class="tool-hint">Operates on visible page</p>
+              <div class="tool-buttons">
+                <button id="rotate-left-btn" class="tool-btn" title="Rotate Left">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z"/>
+                  </svg>
+                  <span>Rotate Left</span>
+                </button>
+                <button id="rotate-right-btn" class="tool-btn" title="Rotate Right">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M11.5,8C14.15,8 16.55,9 18.4,10.6L22,7V16H13L16.62,12.38C15.23,11.22 13.46,10.5 11.5,10.5C7.96,10.5 4.95,12.81 3.9,16L1.53,15.22C2.92,11.03 6.85,8 11.5,8Z"/>
+                  </svg>
+                  <span>Rotate Right</span>
+                </button>
+                <button id="delete-page-btn" class="tool-btn danger" title="Delete Page">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+                  </svg>
+                  <span>Delete Page</span>
+                </button>
+                <button id="extract-page-btn" class="tool-btn" title="Extract Page">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+                  </svg>
+                  <span>Extract Page</span>
+                </button>
+              </div>
+            </div>
           </div>
-          <input type="file" id="signature-file" accept="image/png,image/jpeg" hidden>
-        </div>
-        <div id="signature-preview-container" class="hidden">
-          <img id="signature-preview" alt="Signature preview">
-        </div>
-        <div class="dialog-buttons">
-          <button id="cancel-signature-btn" class="action-btn">Cancel</button>
-          <button id="save-signature-btn" class="action-btn primary">Save</button>
-        </div>
+
+          <!-- Document Tools -->
+          <div class="tool-group" data-group="document-tools">
+            <div class="tool-group-header">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M16,0H8C6.9,0 6,0.9 6,2V18C6,19.1 6.9,20 8,20H20C21.1,20 22,19.1 22,18V6L16,0M20,18H8V2H15V7H20V18M4,4V22H20V24H4C2.9,24 2,23.1 2,22V4H4Z"/>
+              </svg>
+              <span>Document Tools</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/>
+              </svg>
+            </div>
+            <div class="tool-group-content">
+              <div class="tool-buttons">
+                <button id="merge-btn" class="tool-btn" title="Merge PDFs">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M19,20H5V4H7V7H17V4H19M12,2A1,1 0 0,1 13,3A1,1 0 0,1 12,4A1,1 0 0,1 11,3A1,1 0 0,1 12,2M19,2H14.82C14.4,0.84 13.3,0 12,0C10.7,0 9.6,0.84 9.18,2H5A2,2 0 0,0 3,4V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V4A2,2 0 0,0 19,2Z"/>
+                  </svg>
+                  <span>Merge PDFs</span>
+                </button>
+                <button id="split-btn" class="tool-btn" title="Split Document">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M14,4L8,4L8,8L14,8M20,20L14,20L14,16L20,16M20,4L14.5,4L14.5,8L20,8M8,20L8,16L2,16L2,20M8,14L2,14L2,10L8,10M20,14L14,14L14,10L20,10M8,8V4L2,4L2,8M14,14L8,14L8,10L14,10M14,20L8,20L8,16L14,16"/>
+                  </svg>
+                  <span>Split Document</span>
+                </button>
+                <button id="reorder-btn" class="tool-btn" title="Reorder Pages">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M3,15H21V13H3V15M3,19H21V17H3V19M3,11H21V9H3V11M3,5V7H21V5H3Z"/>
+                  </svg>
+                  <span>Reorder Pages</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Redact -->
+          <div class="tool-group" data-group="redact">
+            <div class="tool-group-header">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M2,4V6H4V4H2M4,2H2A2,2 0 0,0 0,4V6H4V4H6V2H4M22,4V6H20V4H22M20,2H22A2,2 0 0,1 24,4V6H20V4H18V2H20M2,20V18H4V20H2M4,22H2A2,2 0 0,1 0,20V18H4V20H6V22H4M22,20V18H20V20H22M20,22H22A2,2 0 0,0 24,20V18H20V20H18V22H20M8,6H16V8H8V6M8,10H16V12H8V10M8,14H12V16H8V14Z"/>
+              </svg>
+              <span>Redact</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/>
+              </svg>
+            </div>
+            <div class="tool-group-content">
+              <div class="tool-buttons">
+                <button id="toggle-redact-btn" class="tool-btn toggle" title="Mark for Redaction">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/>
+                  </svg>
+                  <span>Mark for Redaction</span>
+                </button>
+                <button id="apply-redaction-btn" class="tool-btn primary" title="Apply Redactions" disabled>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
+                  </svg>
+                  <span>Apply Redactions</span>
+                </button>
+                <button id="clear-redaction-btn" class="tool-btn" title="Clear Redactions" disabled>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/>
+                  </svg>
+                  <span>Clear All</span>
+                </button>
+              </div>
+              <p class="tool-warning">Redacted pages become images</p>
+            </div>
+          </div>
+
+          <!-- Sign -->
+          <div class="tool-group" data-group="sign">
+            <div class="tool-group-header">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M21.04 12.13c-.14 0-.28.06-.39.17l-1 1 2.05 2.05 1-1c.22-.22.22-.56 0-.78l-1.27-1.27a.55.55 0 00-.39-.17m-1.97 1.75L13 19.94V22h2.06l6.06-6.06-2.05-2.06M10 21H5c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h9l5 5v2h-2V9h-4V5H5v14h5v2z"/>
+              </svg>
+              <span>Sign</span>
+              <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/>
+              </svg>
+            </div>
+            <div class="tool-group-content">
+              <div class="tool-buttons">
+                <button id="add-signature-btn" class="tool-btn" title="Add Signature">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/>
+                  </svg>
+                  <span>Add Signature</span>
+                </button>
+              </div>
+              <div id="signature-quick-list"></div>
+              <div id="signature-placement-controls" class="hidden">
+                <p class="tool-hint">Click on page to place</p>
+                <div class="placement-actions">
+                  <button id="rotate-sig-left" class="icon-btn" title="Rotate Left">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z"/>
+                    </svg>
+                  </button>
+                  <button id="rotate-sig-right" class="icon-btn" title="Rotate Right">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M11.5,8C14.15,8 16.55,9 18.4,10.6L22,7V16H13L16.62,12.38C15.23,11.22 13.46,10.5 11.5,10.5C7.96,10.5 4.95,12.81 3.9,16L1.53,15.22C2.92,11.03 6.85,8 11.5,8Z"/>
+                    </svg>
+                  </button>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="add-timestamp-check" checked>
+                    Timestamp
+                  </label>
+                </div>
+                <div class="tool-buttons">
+                  <button id="confirm-signature-btn" class="tool-btn primary">Place Signature</button>
+                  <button id="cancel-signature-btn" class="tool-btn">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Download (always visible at bottom) -->
+          <div class="tool-group download-group">
+            <button id="download-btn" class="tool-btn primary full-width">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
+              </svg>
+              <span>Download PDF</span>
+            </button>
+          </div>
+        </aside>
       </div>
+    </main>
 
-      <!-- Signature Placement View -->
-      <div id="signature-placement" class="hidden">
-        <div id="sign-page-nav">
-          <button id="sign-prev-page" class="nav-btn">&lt;</button>
-          <span id="sign-page-info">Page 1 of 1</span>
-          <button id="sign-next-page" class="nav-btn">&gt;</button>
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="hidden">
+      <div id="modal-container">
+        <div class="modal-header">
+          <h2 id="modal-title">Modal</h2>
+          <button id="modal-close" class="modal-close-btn">&times;</button>
         </div>
-
-        <div id="signature-canvas-container">
-          <canvas id="signature-page-canvas"></canvas>
-          <canvas id="signature-overlay-canvas"></canvas>
-        </div>
-
-        <div id="signature-controls" class="action-bar">
-          <button id="rotate-sig-left" class="action-btn small" title="Rotate Left">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M12.5,8C9.85,8 7.45,9 5.6,10.6L2,7V16H11L7.38,12.38C8.77,11.22 10.54,10.5 12.5,10.5C16.04,10.5 19.05,12.81 20.1,16L22.47,15.22C21.08,11.03 17.15,8 12.5,8Z"/>
-            </svg>
-          </button>
-          <button id="rotate-sig-right" class="action-btn small" title="Rotate Right">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-              <path d="M11.5,8C14.15,8 16.55,9 18.4,10.6L22,7V16H13L16.62,12.38C15.23,11.22 13.46,10.5 11.5,10.5C7.96,10.5 4.95,12.81 3.9,16L1.53,15.22C2.92,11.03 6.85,8 11.5,8Z"/>
-            </svg>
-          </button>
-          <label class="checkbox-label">
-            <input type="checkbox" id="add-timestamp-check" checked>
-            Add timestamp
-          </label>
-          <button id="place-signature-btn" class="action-btn primary">Place</button>
-          <button id="cancel-placement-btn" class="action-btn">Cancel</button>
-        </div>
+        <div id="modal-body"></div>
+        <div id="modal-footer"></div>
       </div>
     </div>
 
@@ -192,6 +255,10 @@
     </div>
   </div>
 
+  <!-- Hidden file inputs -->
+  <input type="file" id="merge-input" accept=".pdf" multiple hidden>
+  <input type="file" id="signature-file" accept="image/png,image/jpeg" hidden>
+
   <!-- Scripts -->
   <script src="../libs/pdf-lib.min.js"></script>
   <script src="../libs/pdf.js"></script>
@@ -200,6 +267,8 @@
   <script src="../src/pdf-operations.js"></script>
   <script src="../src/signature-manager.js"></script>
   <script src="../src/redaction.js"></script>
+  <script src="../src/viewer.js"></script>
+  <script src="../src/tools-panel.js"></script>
   <script src="../src/ui-handler.js"></script>
   <script src="popup.js"></script>
 </body>
